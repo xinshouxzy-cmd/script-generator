@@ -1,4 +1,4 @@
-"""扣子编程客户端 — 调用遵农智创Bot"""
+"""扣子编程客户端 — 调用遵农智创Bot（SSE流式）"""
 import os
 import json
 import uuid
@@ -14,39 +14,14 @@ def _get_token():
     return ""
 
 
-def _request(path_or_url, data=None):
-    token = _get_token()
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json"
-    }
-    body = json.dumps(data).encode("utf-8") if data else None
-    req = urllib.request.Request(path_or_url, data=body, headers=headers, method="POST")
-    try:
-        with urllib.request.urlopen(req) as resp:
-            raw = resp.read().decode("utf-8")
-            status = resp.getcode()
-    except urllib.error.HTTPError as e:
-        raw = e.read().decode("utf-8", errors="replace")
-        status = e.code
-    except Exception as e:
-        return None, 0, str(e)
-    try:
-        return json.loads(raw), status, raw
-    except json.JSONDecodeError:
-        return None, status, raw[:500]
-
-
 def generate_script(prompt_text, user_id="staff_001"):
     if not _get_token():
-        return {"success": False, "error": "API Token未配置，请在Render环境变量中设置COZE_PROJECT_TOKEN"}
+        return {"success": False, "error": "API Token未配置"}
 
     data = {
         "content": {
             "query": {
-                "prompt": [
-                    {"type": "text", "content": {"text": prompt_text}}
-                ]
+                "prompt": [{"type": "text", "content": {"text": prompt_text}}]
             }
         },
         "type": "query",
@@ -55,20 +30,37 @@ def generate_script(prompt_text, user_id="staff_001"):
     }
 
     try:
-        resp, status, raw = _request(API_ENDPOINT, data=data)
-        if status == 0:
-            return {"success": False, "error": f"网络异常: {raw}", "raw": raw}
-        if status != 200:
-            return {"success": False, "error": f"HTTP {status}", "raw": raw[:500]}
-        if resp is None:
-            return {"success": False, "error": f"响应非JSON", "raw": raw[:500]}
+        token = _get_token()
+        body = json.dumps(data).encode("utf-8")
+        req = urllib.request.Request(API_ENDPOINT, data=body, headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "Accept": "text/event-stream"
+        }, method="POST")
 
-        answer = resp.get("answer", "") or resp.get("content", "") or resp.get("data", {}).get("answer", "")
-        if isinstance(answer, dict):
-            answer = answer.get("text", str(answer))
-        if not answer:
-            return {"success": False, "error": "Bot未返回内容", "raw": json.dumps(resp, ensure_ascii=False)[:500]}
+        answer_parts = []
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            for line_bytes in resp:
+                line = line_bytes.decode("utf-8").strip()
+                if not line or line.startswith(":"):
+                    continue
+                if line.startswith("data: "):
+                    try:
+                        event = json.loads(line[6:])
+                        content = event.get("content", {})
+                        ans = content.get("answer")
+                        if ans and isinstance(ans, str):
+                            answer_parts.append(ans)
+                        if content.get("message_end"):
+                            break
+                    except json.JSONDecodeError:
+                        continue
+                elif line.startswith("event: "):
+                    pass
 
-        return {"success": True, "script": str(answer)}
+        answer = "".join(answer_parts).strip()
+        if answer:
+            return {"success": True, "script": answer}
+        return {"success": False, "error": "Bot未返回有效内容", "raw": f"Received {len(answer_parts)} SSE events"}
     except Exception as e:
         return {"success": False, "error": f"API异常: {str(e)}"}

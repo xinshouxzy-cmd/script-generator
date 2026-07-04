@@ -334,12 +334,43 @@ function saveTpl(isUpdate){
 function del(id){if(confirm('确认删除？')){fetch('/api/templates/'+id,{method:'DELETE'}).then(function(){pushGitHub();load();});}}
 function loadKB(){
     document.getElementById('kbArea').innerHTML='<div class="loading">加载中...</div>';
+    document.getElementById('rulesArea').innerHTML='<div class="loading">加载中...</div>';
     fetch('/api/knowledge').then(r=>r.json()).then(function(d){
         var prods=d.banking_products||[];
-        var html=prods.map(function(c){return '<div style="display:inline-block;margin:4px;padding:4px 10px;background:rgba(37,244,238,0.08);border-radius:6px"><strong>'+c.category+'</strong>：'+c.items.join('、')+'</div>';}).join('');
-        document.getElementById('kbArea').innerHTML=html||'暂无';
+        var kbhtml='<div class="form-box"><div style="display:flex;justify-content:space-between;margin-bottom:8px"><strong>产品分类</strong><button class="btn-sm" style="background:rgba(37,244,238,0.3)" onclick="addKB()">+ 添加分类</button></div>';
+        prods.forEach(function(c,i){
+            kbhtml+='<div style="margin:4px 0;padding:8px;background:rgba(255,255,255,0.03);border-radius:8px"><strong>'+c.category+'</strong><br><span style="font-size:12px;color:rgba(255,255,255,0.5)">'+c.items.join('、')+'</span> <button class="btn-sm btn-danger" style="font-size:10px;padding:2px 8px" onclick="delKB('+i+')">删除</button></div>';
+        });
+        kbhtml+='</div>';
+        document.getElementById('kbArea').innerHTML=kbhtml||'暂无';
+
         var rules=d.compliance_rules||[];
-        document.getElementById('rulesArea').innerHTML=rules.map(function(r){return '<div style="padding:4px 0;font-size:13px">✅ '+r+'</div>';}).join('')||'暂无';
+        var rh='<div class="form-box"><div style="display:flex;justify-content:space-between;margin-bottom:8px"><strong>合规规则</strong><button class="btn-sm" style="background:rgba(37,244,238,0.3)" onclick="addRule()">+ 添加规则</button></div>';
+        rules.forEach(function(r,i){
+            rh+='<div style="padding:6px 0;display:flex;justify-content:space-between"><span>✅ '+r+'</span><button class="btn-sm btn-danger" style="font-size:10px;padding:2px 8px" onclick="delRule('+i+')">删除</button></div>';
+        });
+        rh+='</div>';
+        document.getElementById('rulesArea').innerHTML=rh||'暂无';
+        allKB=d;
+    });
+}
+function addKB(){
+    var cat=prompt('分类名称（如：存款、贷款、理财）');if(!cat)return;
+    var items=prompt('包含的产品（逗号分隔）');if(!items)return;
+    allKB.banking_products.push({category:cat,items:items.split(',').map(function(s){return s.trim()})});
+    saveKB();
+}
+function delKB(i){if(confirm('确认删除此分类？')){allKB.banking_products.splice(i,1);saveKB();}}
+function addRule(){
+    var r=prompt('输入合规规则（如：必须标注风险提示）');if(!r)return;
+    allKB.compliance_rules.push(r);
+    saveKB();
+}
+function delRule(i){if(confirm('确认删除此规则？')){allKB.compliance_rules.splice(i,1);saveKB();}}
+var allKB={};
+function saveKB(){
+    fetch('/api/knowledge',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(allKB)}).then(function(r){return r.json()}).then(function(d){
+        if(d.success){loadKB();pushGitHub();}else{alert('保存失败: '+d.error)}
     });
 }
 loadKB();load();

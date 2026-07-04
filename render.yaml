@@ -14,4 +14,4 @@ services:
       - key: GITHUB_PAT
         sync: false
       - key: GITHUB_REPO
-        value: "xinshouxzy-cmd/douyin-downloader"
+        value: "xinshouxzy-cmd/script-generator"

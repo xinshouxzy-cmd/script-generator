@@ -62,7 +62,7 @@ class TemplateStore:
     def refresh_from_github(self):
         """从GitHub拉取最新templates.json"""
         try:
-            repo = os.environ.get("GITHUB_REPO", "xinshouxzy-cmd/douyin-downloader")
+            repo = os.environ.get("GITHUB_REPO", "xinshouxzy-cmd/script-generator")
             token = os.environ.get("GITHUB_PAT", "")
             if not token:
                 return False
@@ -82,7 +82,7 @@ class TemplateStore:
     def push_to_github(self):
         """推送templates.json到GitHub"""
         try:
-            repo = os.environ.get("GITHUB_REPO", "xinshouxzy-cmd/douyin-downloader")
+            repo = os.environ.get("GITHUB_REPO", "xinshouxzy-cmd/script-generator")
             token = os.environ.get("GITHUB_PAT", "")
             if not token:
                 return False

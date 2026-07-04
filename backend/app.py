@@ -141,7 +141,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 var sessionId = '', step = 0;
 
 function appendBubble(role, text, css){
-    var d=document.createElement('div');d.className=css;d.textContent=text;document.getElementById('chatArea').appendChild(d);d.scrollIntoView({behavior:'smooth'});
+    var d=document.createElement('div');d.className=css;d.style.whiteSpace='pre-wrap';d.textContent=text;document.getElementById('chatArea').appendChild(d);d.scrollIntoView({behavior:'smooth'});
 }
 
 function startQA(){
@@ -155,22 +155,16 @@ function startQA(){
 
 function showQuestion(q){
     step=q.step;
-    var txt=q.question;if(q.hint)txt+='\n('+q.hint+')';
+    var txt=q.question;if(q.hint)txt+='\n「'+q.hint+'」';
     appendBubble('AI',txt,'question-box');
     var ia=document.getElementById('inputArea');
     ia.style.display='block';
-    if(q.options){
-        ia.innerHTML='<div class="options-grid">'+q.options.map(function(o){
-            return '<button class="opt-btn" onclick="submitAnswer(\''+o.replace(/'/g,"\\'")+'\')">'+o+'</button>';
-        }).join('')+'</div>';
-    }else{
-        ia.innerHTML='<div class="input-row"><input id="txtInput" placeholder="输入主题..." onkeydown="if(event.key===\'Enter\')submitAnswer(this.value)"><button class="btn" onclick="submitAnswer(document.getElementById(\'txtInput\').value)">确定</button></div>';
-        setTimeout(function(){var t=document.getElementById('txtInput');if(t)t.focus();},100);
-    }
+    ia.innerHTML='<div class="input-row"><textarea id="txtInput" placeholder="输入你的想法..." rows="3" style="flex:1;padding:12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:12px;color:#fff;font-size:14px;outline:none;font-family:inherit;resize:none;line-height:1.5"></textarea></div><button class="btn" onclick="submitAnswer(document.getElementById(\'txtInput\').value)" style="width:100%;margin-top:8px;padding:12px">确认，继续</button>';
+    setTimeout(function(){var t=document.getElementById('txtInput');if(t)t.focus();},100);
 }
 
 function submitAnswer(val){
-    if(!val.trim())return;
+    if(!val||!val.trim())return;
     var ia=document.getElementById('inputArea');ia.innerHTML='<div class="loading"><div class="spinner"></div></div>';
     appendBubble('你',val,'answer-box');
     fetch('/api/qa/answer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sessionId,answer:val})}).then(r=>r.json()).then(d=>{

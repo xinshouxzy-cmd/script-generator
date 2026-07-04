@@ -4,9 +4,10 @@ import json
 from flask import Flask, request, jsonify, render_template_string
 from flask_cors import CORS
 
-from qa_engine import create_session, get_session
+from qa_engine import create_session, get_session, load_knowledge
 from template_store import store
 from coze_client import generate_script
+import json
 
 app = Flask(__name__)
 CORS(app)
@@ -95,6 +96,23 @@ def refresh_templates():
 def push_templates():
     ok = store.push_to_github()
     return jsonify({"success": ok})
+
+
+@app.route("/api/knowledge", methods=["GET"])
+def get_knowledge():
+    return jsonify(load_knowledge())
+
+
+@app.route("/api/knowledge", methods=["POST"])
+def save_knowledge():
+    data = request.get_json()
+    try:
+        kb_file = os.path.join(os.path.dirname(__file__), "data", "knowledge.json")
+        with open(kb_file, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
 
 
 EMPLOYEE_HTML = r'''<!DOCTYPE html>
@@ -222,13 +240,19 @@ th{color:rgba(255,255,255,0.5);font-weight:500}
 </head>
 <body>
 <h1>📝 脚本生成器 — 管理后台</h1>
-<p style="color:rgba(255,255,255,0.4);font-size:13px">模板库管理 · GitHub持久化 · 手动+自动更新</p>
+<p style="color:rgba(255,255,255,0.4);font-size:13px">三大体系：知识库 · 合规规则 · 模板库</p>
 
 <div style="margin:16px 0;display:flex;gap:8px;flex-wrap:wrap">
-<button class="btn-sm btn-success" onclick="syncGitHub()">🔄 从GitHub同步</button>
+<button class="btn-sm btn-success" onclick="syncGitHub()">🔄 同步GitHub</button>
 <button class="btn-sm btn-success" onclick="pushGitHub()">📤 推送到GitHub</button>
 <button class="btn-sm btn-blue" onclick="showAddForm()">+ 添加模板</button>
 </div>
+
+<h2>银行业务知识库 <span style="font-size:12px;color:rgba(255,255,255,0.4)">影响脚本内容准确性</span></h2>
+<div id="kbArea"><div class="loading">加载中...</div></div>
+
+<h2>合规规则 <span style="font-size:12px;color:rgba(255,255,255,0.4)">每个脚本必须遵守</span></h2>
+<div id="rulesArea"><div class="loading">加载中...</div></div>
 
 <h2>模板列表 <span style="font-size:12px;color:rgba(255,255,255,0.4)" id="tplCount"></span></h2>
 <div id="tableArea"><div class="loading">加载中...</div></div>
@@ -308,7 +332,17 @@ function saveTpl(isUpdate){
     });
 }
 function del(id){if(confirm('确认删除？')){fetch('/api/templates/'+id,{method:'DELETE'}).then(function(){pushGitHub();load();});}}
-load();
+function loadKB(){
+    document.getElementById('kbArea').innerHTML='<div class="loading">加载中...</div>';
+    fetch('/api/knowledge').then(r=>r.json()).then(function(d){
+        var prods=d.banking_products||[];
+        var html=prods.map(function(c){return '<div style="display:inline-block;margin:4px;padding:4px 10px;background:rgba(37,244,238,0.08);border-radius:6px"><strong>'+c.category+'</strong>：'+c.items.join('、')+'</div>';}).join('');
+        document.getElementById('kbArea').innerHTML=html||'暂无';
+        var rules=d.compliance_rules||[];
+        document.getElementById('rulesArea').innerHTML=rules.map(function(r){return '<div style="padding:4px 0;font-size:13px">✅ '+r+'</div>';}).join('')||'暂无';
+    });
+}
+loadKB();load();
 </script>
 </body>
 </html>'''

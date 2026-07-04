@@ -1,5 +1,15 @@
 """问答引擎 — 开放式引导，帮员工梳理创作思路"""
 import json
+import os
+
+KNOWLEDGE_FILE = os.path.join(os.path.dirname(__file__), "data", "knowledge.json")
+
+
+def load_knowledge():
+    if os.path.exists(KNOWLEDGE_FILE):
+        with open(KNOWLEDGE_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {"compliance_rules": [], "banking_products": [], "common_terms": {}}
 
 STEPS = [
     {
@@ -52,21 +62,12 @@ class QASession:
         return self.step >= len(STEPS)
 
     def build_prompt(self, templates):
-        rules = {
-            "合规要求": [
-                "不承诺具体收益率",
-                "不使用绝对化用语（最/第一/100%/保证）",
-                "金融产品必须附带风险提示",
-                "不诱导分享、转发、点赞",
-                "不攻击同行"
-            ],
-            "拍摄建议": [
-                "着装整洁，佩戴工牌",
-                "背景体现银行或工作环境",
-                "语速适中，表情自然",
-                "时长控制在60-90秒"
-            ]
-        }
+        kb = load_knowledge()
+        rules = kb.get("compliance_rules", [
+            "不承诺具体收益率", "不使用绝对化用语", "风险提示必须标注", "不诱导分享"
+        ])
+        products = kb.get("banking_products", [])
+        terms = kb.get("common_terms", {})
 
         topic = self.answers.get("topic", "")
         matched_templates = []
@@ -104,11 +105,28 @@ class QASession:
                 prompt_parts.append("")
 
         prompt_parts.extend([
+            "## 业务知识库",
+            "你可以参考以下银行产品信息，确保脚本内容准确：",
+        ])
+        for cat in products[:5]:
+            prompt_parts.append(f"- {cat.get('category', '')}：{', '.join(cat.get('items', []))}")
+
+        topic = self.answers.get("topic", "")
+        for term, explain in terms.items():
+            if term in topic:
+                prompt_parts.append(f"  （注意：「{term}」的定义：{explain}）")
+                break
+        prompt_parts.append("")
+
+        prompt_parts.extend([
             "## 合规要求（务必遵守）",
-            *[f"- {r}" for r in rules["合规要求"]],
+            *[f"- {r}" for r in rules],
             "",
             "## 拍摄建议",
-            *[f"- {r}" for r in rules["拍摄建议"]],
+            "- 着装整洁，佩戴工牌",
+            "- 背景体现银行或工作环境",
+            "- 语速适中，表情自然",
+            "- 时长控制在60-90秒",
             "",
             "## 输出格式（严格按此顺序）",
             "【脚本标题】一句吸引人的标题（10字内）",

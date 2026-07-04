@@ -158,12 +158,14 @@ function showQuestion(q){
     var txt=q.question;if(q.hint)txt+='\n('+q.hint+')';
     appendBubble('AI',txt,'question-box');
     var ia=document.getElementById('inputArea');
+    ia.style.display='block';
     if(q.options){
         ia.innerHTML='<div class="options-grid">'+q.options.map(function(o){
             return '<button class="opt-btn" onclick="submitAnswer(\''+o.replace(/'/g,"\\'")+'\')">'+o+'</button>';
         }).join('')+'</div>';
     }else{
         ia.innerHTML='<div class="input-row"><input id="txtInput" placeholder="输入主题..." onkeydown="if(event.key===\'Enter\')submitAnswer(this.value)"><button class="btn" onclick="submitAnswer(document.getElementById(\'txtInput\').value)">确定</button></div>';
+        setTimeout(function(){var t=document.getElementById('txtInput');if(t)t.focus();},100);
     }
 }
 

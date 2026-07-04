@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: script-generator
+    env: python
+    region: singapore
+    buildCommand: cd backend && pip install -r requirements.txt
+    startCommand: cd backend && gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+    plan: free
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.0"
+      - key: COZE_PAT
+        sync: false
+      - key: COZE_SCRIPT_BOT_ID
+        sync: false
+      - key: GITHUB_PAT
+        sync: false
+      - key: GITHUB_REPO
+        value: "xinshouxzy-cmd/douyin-downloader"

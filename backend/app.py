@@ -91,6 +91,12 @@ def refresh_templates():
     return jsonify({"success": ok, "count": len(store.get_all())})
 
 
+@app.route("/api/templates/push", methods=["POST"])
+def push_templates():
+    ok = store.push_to_github()
+    return jsonify({"success": ok})
+
+
 EMPLOYEE_HTML = r'''<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -192,55 +198,116 @@ function copyScript(){
 ADMIN_HTML = r'''<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>脚本生成器 — 管理后台</title>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>管理后台</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#0a0a0a;color:#e0e0e0;padding:20px;max-width:800px;margin:0 auto}
+body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#0a0a0a;color:#e0e0e0;padding:20px;max-width:900px;margin:0 auto}
 h1{font-size:20px;margin-bottom:8px;background:linear-gradient(135deg,#fe2c55,#ff9a44);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-h2{font-size:16px;margin:24px 0 12px;color:#fff}
-table{width:100%;border-collapse:collapse;font-size:13px}
-th,td{padding:10px 12px;text-align:left;border-bottom:1px solid rgba(255,255,255,0.08)}
+h2{font-size:16px;margin:24px 0 12px}
+table{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px}
+th,td{padding:10px;text-align:left;border-bottom:1px solid rgba(255,255,255,0.08)}
 th{color:rgba(255,255,255,0.5);font-weight:500}
 .tag{display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;margin-right:4px}
-.tag-type{background:rgba(37,244,238,0.12);color:#25f4ee}
-.tag-scene{background:rgba(254,44,85,0.1);color:#fe2c55}
-.tag-source{background:rgba(255,154,68,0.1);color:#ff9a44}
-.btn-sm{padding:6px 12px;border:none;border-radius:6px;font-size:12px;cursor:pointer;margin-right:4px}
-.btn-danger{background:rgba(254,44,85,0.15);color:#fe2c55}
-.btn-success{background:rgba(37,244,238,0.15);color:#25f4ee}
-.btn-amber{background:rgba(255,154,68,0.15);color:#ff9a44}
+.tag-type{background:rgba(37,244,238,0.12);color:#25f4ee}.tag-scene{background:rgba(254,44,85,0.1);color:#fe2c55}.tag-source{background:rgba(255,154,68,0.1);color:#ff9a44}
+.btn-sm{padding:6px 14px;border:none;border-radius:6px;font-size:12px;cursor:pointer;margin:2px;color:#fff}
+.btn-danger{background:rgba(254,44,85,0.5)}.btn-success{background:rgba(37,244,238,0.3)}.btn-blue{background:rgba(24,95,165,0.5)}
+.form-box{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:16px;margin-bottom:16px}
+.form-box input,.form-box textarea,.form-box select{width:100%;padding:10px;margin:6px 0;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:8px;color:#fff;font-size:13px;font-family:inherit}
+.form-box textarea{resize:vertical;min-height:60px}
+.form-row{display:flex;gap:10px}
+.form-row>*{flex:1}
 .loading{text-align:center;padding:20px;color:rgba(255,255,255,0.4)}
-</style>
+.green{color:#25f4ee}</style>
 </head>
 <body>
 <h1>📝 脚本生成器 — 管理后台</h1>
-<p style="color:rgba(255,255,255,0.4);font-size:13px;margin-bottom:20px">模板库管理 · 手动编辑 + 自动刷新</p>
-<div style="margin-bottom:16px">
-<button class="btn-sm btn-success" onclick="refreshTemplates()">🔄 从GitHub同步</button>
-<button class="btn-sm btn-amber" onclick="autoRefresh()">🤖 自动抓取新模板</button>
+<p style="color:rgba(255,255,255,0.4);font-size:13px">模板库管理 · GitHub持久化 · 手动+自动更新</p>
+
+<div style="margin:16px 0;display:flex;gap:8px;flex-wrap:wrap">
+<button class="btn-sm btn-success" onclick="syncGitHub()">🔄 从GitHub同步</button>
+<button class="btn-sm btn-success" onclick="pushGitHub()">📤 推送到GitHub</button>
+<button class="btn-sm btn-blue" onclick="showAddForm()">+ 添加模板</button>
 </div>
+
+<h2>模板列表 <span style="font-size:12px;color:rgba(255,255,255,0.4)" id="tplCount"></span></h2>
 <div id="tableArea"><div class="loading">加载中...</div></div>
+
+<div id="editForm" style="display:none"></div>
+
 <script>
+var allTemplates=[];
 function load(){
     document.getElementById('tableArea').innerHTML='<div class="loading">加载中...</div>';
     fetch('/api/templates').then(r=>r.json()).then(ts=>{
-        if(!ts.length){document.getElementById('tableArea').innerHTML='<p style="color:rgba(255,255,255,0.4)">暂无模板</p>';return}
-        var rows=ts.map(function(t,i){
-            return '<tr><td>'+t.title+'</td><td><span class="tag tag-type">'+t.type+'</span> <span class="tag tag-scene">'+t.scene+'</span></td><td><span class="tag tag-source">'+t.source+'</span></td><td>'+t.created_at+'</td><td><button class="btn-sm btn-danger" onclick="del(\''+t.id+'\')">删除</button></td></tr>';
+        allTemplates=ts;
+        document.getElementById('tplCount').textContent='共'+ts.length+'条';
+        if(!ts.length){document.getElementById('tableArea').innerHTML='<p style="color:rgba(255,255,255,0.4)">暂无模板，点击上方按钮添加</p>';return}
+        var rows=ts.map(function(t){
+            return '<tr><td><strong>'+t.title+'</strong><br><span style="font-size:11px;color:rgba(255,255,255,0.4)">'+t.script_structure+'</span></td><td><span class="tag tag-type">'+t.type+'</span><span class="tag tag-scene">'+t.scene+'</span></td><td><span class="tag tag-source">'+t.source+'</span></td><td>'+t.created_at+'</td><td><button class="btn-sm" style="background:rgba(37,244,238,0.2)" onclick="editTpl(\''+t.id+'\')">编辑</button><button class="btn-sm btn-danger" onclick="del(\''+t.id+'\')">删除</button></td></tr>';
         }).join('');
-        document.getElementById('tableArea').innerHTML='<table><thead><tr><th>模板名称</th><th>分类</th><th>来源</th><th>更新时间</th><th>操作</th></tr></thead><tbody>'+rows+'</tbody></table>';
+        document.getElementById('tableArea').innerHTML='<table><thead><tr><th>模板名称</th><th>分类</th><th>来源</th><th>时间</th><th>操作</th></tr></thead><tbody>'+rows+'</tbody></table>';
     });
 }
-function refreshTemplates(){
+function syncGitHub(){
     fetch('/api/templates/refresh',{method:'POST'}).then(r=>r.json()).then(function(d){
-        alert(d.success?'已同步，共'+d.count+'条模板':'同步失败');
+        alert(d.success?'同步成功，共'+d.count+'条模板':'同步失败');
         load();
     });
 }
-function autoRefresh(){alert('自动抓取功能开发中，请手动添加模板。');}
-function del(id){if(confirm('确认删除？')){fetch('/api/templates/'+id,{method:'DELETE'}).then(function(){load();});}}
+function pushGitHub(){
+    fetch('/api/templates/push',{method:'POST'}).then(r=>r.json()).then(function(d){
+        alert(d.success?'推送成功':'推送失败');
+    });
+}
+function showAddForm(){
+    var h='<div class="form-box"><h2>添加新模板</h2>';
+    h+='<div class="form-row"><input id="af_title" placeholder="模板名称"><input id="af_scene" placeholder="场景（如存款、反诈）"></div>';
+    h+='<select id="af_type"><option>产品营销</option><option>金融科普</option><option>政策解读</option><option>企业文化</option></select>';
+    h+='<input id="af_structure" placeholder="脚本结构（如：痛点引入→产品介绍→对比优势→行动号召）">';
+    h+='<textarea id="af_shots" placeholder="分镜提示（每行一个）"></textarea>';
+    h+='<textarea id="af_sample" placeholder="样例开头"></textarea>';
+    h+='<input id="af_tags" placeholder="热门标签（逗号分隔）">';
+    h+='<div style="margin-top:8px"><button class="btn-sm btn-success" onclick="saveTpl()">保存模板</button><button class="btn-sm btn-danger" onclick="document.getElementById(\'editForm\').style.display=\'none\'">取消</button></div></div>';
+    document.getElementById('editForm').innerHTML=h;
+    document.getElementById('editForm').style.display='block';
+    document.getElementById('editForm').scrollIntoView({behavior:'smooth'});
+}
+function editTpl(id){
+    var t=allTemplates.find(function(x){return x.id===id});if(!t)return;
+    var h='<div class="form-box"><h2>编辑模板：'+t.title+'</h2>';
+    h+='<div class="form-row"><input id="af_title" value="'+t.title+'"><input id="af_scene" value="'+t.scene+'"></div>';
+    h+='<select id="af_type">'+['产品营销','金融科普','政策解读','企业文化'].map(function(o){return '<option'+(o===t.type?' selected':'')+'>'+o+'</option>';}).join('')+'</select>';
+    h+='<input id="af_structure" value="'+(t.script_structure||'')+'">';
+    h+='<textarea id="af_shots">'+(t.shot_tips||[]).join('\n')+'</textarea>';
+    h+='<textarea id="af_sample">'+(t.sample||'')+'</textarea>';
+    h+='<input id="af_tags" value="'+(t.hot_tags||[]).join(',')+'">';
+    h+='<div style="margin-top:8px"><input type="hidden" id="af_id" value="'+t.id+'"><button class="btn-sm btn-success" onclick="saveTpl(true)">更新模板</button><button class="btn-sm btn-danger" onclick="document.getElementById(\'editForm\').style.display=\'none\'">取消</button></div></div>';
+    document.getElementById('editForm').innerHTML=h;
+    document.getElementById('editForm').style.display='block';
+    document.getElementById('editForm').scrollIntoView({behavior:'smooth'});
+}
+function saveTpl(isUpdate){
+    var id=document.getElementById('af_id');var tid=id?encodeURIComponent(id.value):'';
+    var data={
+        type:document.getElementById('af_type').value,
+        scene:document.getElementById('af_scene').value,
+        title:document.getElementById('af_title').value,
+        script_structure:document.getElementById('af_structure').value,
+        shot_tips:document.getElementById('af_shots').value.split('\n').filter(Boolean),
+        sample:document.getElementById('af_sample').value,
+        hot_tags:document.getElementById('af_tags').value.split(',').map(function(s){return s.trim();}).filter(Boolean),
+        source:'manual'
+    };
+    var method=isUpdate?'PUT':'POST';
+    var url='/api/templates'+(isUpdate?'/'+tid:'');
+    fetch(url,{method:method,headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}).then(r=>r.json()).then(function(){
+        pushGitHub();
+        document.getElementById('editForm').style.display='none';
+        load();
+    });
+}
+function del(id){if(confirm('确认删除？')){fetch('/api/templates/'+id,{method:'DELETE'}).then(function(){pushGitHub();load();});}}
 load();
 </script>
 </body>

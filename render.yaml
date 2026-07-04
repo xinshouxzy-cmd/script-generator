@@ -9,9 +9,7 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: "3.11.0"
-      - key: COZE_PAT
-        sync: false
-      - key: COZE_SCRIPT_BOT_ID
+      - key: COZE_PROJECT_TOKEN
         sync: false
       - key: GITHUB_PAT
         sync: false

@@ -48,7 +48,9 @@ def qa_answer():
         if result.get("success"):
             return jsonify({"done": True, "script": result["script"]})
         else:
-            return jsonify({"done": True, "script": prompt, "note": f"Bot调用失败({result.get('error')})，以下是原始Prompt，可复制到扣子手动生成"})
+            err = result.get("error", "未知错误")
+            raw = result.get("raw", "")
+            return jsonify({"done": True, "script": prompt, "note": f"Bot调用失败: {err}", "raw": raw})
     
     return jsonify({"done": False, "question": next_q})
 

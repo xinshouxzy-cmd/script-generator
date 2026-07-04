@@ -22,8 +22,19 @@ def _request(path_or_url, data=None):
     }
     body = json.dumps(data).encode("utf-8") if data else None
     req = urllib.request.Request(path_or_url, data=body, headers=headers, method="POST")
-    with urllib.request.urlopen(req) as resp:
-        return json.loads(resp.read().decode("utf-8"))
+    try:
+        with urllib.request.urlopen(req) as resp:
+            raw = resp.read().decode("utf-8")
+            status = resp.getcode()
+    except urllib.error.HTTPError as e:
+        raw = e.read().decode("utf-8", errors="replace")
+        status = e.code
+    except Exception as e:
+        return None, 0, str(e)
+    try:
+        return json.loads(raw), status, raw
+    except json.JSONDecodeError:
+        return None, status, raw[:500]
 
 
 def generate_script(prompt_text, user_id="staff_001"):
@@ -44,7 +55,14 @@ def generate_script(prompt_text, user_id="staff_001"):
     }
 
     try:
-        resp = _request(API_ENDPOINT, data=data)
+        resp, status, raw = _request(API_ENDPOINT, data=data)
+        if status == 0:
+            return {"success": False, "error": f"网络异常: {raw}", "raw": raw}
+        if status != 200:
+            return {"success": False, "error": f"HTTP {status}", "raw": raw[:500]}
+        if resp is None:
+            return {"success": False, "error": f"响应非JSON", "raw": raw[:500]}
+
         answer = resp.get("answer", "") or resp.get("content", "") or resp.get("data", {}).get("answer", "")
         if isinstance(answer, dict):
             answer = answer.get("text", str(answer))

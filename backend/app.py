@@ -100,7 +100,8 @@ def push_templates():
 
 @app.route("/api/knowledge", methods=["GET"])
 def get_knowledge():
-    return jsonify(load_knowledge())
+    kb = load_knowledge()
+    return jsonify(kb.get("knowledge_base", kb))
 
 
 @app.route("/api/knowledge", methods=["POST"])
@@ -108,8 +109,9 @@ def save_knowledge():
     data = request.get_json()
     try:
         kb_file = os.path.join(os.path.dirname(__file__), "data", "knowledge.json")
+        wrapped = {"knowledge_base": data}
         with open(kb_file, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+            json.dump(wrapped, f, ensure_ascii=False, indent=2)
         return jsonify({"success": True})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
